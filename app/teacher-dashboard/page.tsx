@@ -292,7 +292,7 @@ export default function TeacherDashboard() {
                 <p className="text-muted-foreground">Total Events Posted</p>
               </div>
               <div className="bg-card border border-border rounded-lg p-6">
-                <div className="text-3xl font-bold text-green-600 mb-2">{Math.floor(Math.random() * 150) + 50}</div>
+                <div className="text-3xl font-bold text-green-600 mb-2">{postedEvents.length * 25 + postedCourses.length * 15}</div>
                 <p className="text-muted-foreground">Total Attendees</p>
               </div>
               <div className="bg-card border border-border rounded-lg p-6">

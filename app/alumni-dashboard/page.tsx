@@ -3,17 +3,26 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
-import { jobsData, studentsData } from "@/lib/data"
+import { jobsData } from "@/lib/data"
 import { PostJobForm, type JobFormData } from "@/components/post-job-form"
 import { ResumeReviewModal, type ResumeReview } from "@/components/resume-review-modal"
 import type { ResumeData } from "@/components/resume-builder-modal"
 import { GlobalChat } from "@/components/global-chat"
 import { ChatWindow } from "@/components/chat-window"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
 import { getUserConversations, type ConversationData } from "@/lib/firestore/chat-service"
 import { useRouter } from "next/navigation"
+
+interface StudentUser {
+  uid: string
+  name: string
+  email: string
+  course?: string
+  batch?: string
+  image?: string
+}
 
 export default function AlumniDashboard() {
   const [activeTab, setActiveTab] = useState<
@@ -33,6 +42,8 @@ export default function AlumniDashboard() {
   const [editForm, setEditForm] = useState<any>({})
   const [conversations, setConversations] = useState<ConversationData[]>([])
   const [selectedChat, setSelectedChat] = useState<{ id: string; name: string } | null>(null)
+  const [students, setStudents] = useState<StudentUser[]>([])
+  const [loadingStudents, setLoadingStudents] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
@@ -57,18 +68,48 @@ export default function AlumniDashboard() {
     return () => unsubscribe()
   }, [router])
 
-  // Load conversations when profile is loaded
+  const loadConversations = async (userId: string) => {
+    try {
+      const convos = await getUserConversations(userId, "alumni")
+      setConversations(convos)
+    } catch (error) {
+      console.error("Error loading conversations:", error)
+    }
+  }
+
+  const loadStudents = async () => {
+    setLoadingStudents(true)
+    try {
+      const usersRef = collection(db, "users")
+      const q = query(usersRef, where("role", "==", "student"))
+      const snapshot = await getDocs(q)
+
+      const studentsList: StudentUser[] = snapshot.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          uid: doc.id,
+          name: data.name || "Student",
+          email: data.email || "",
+          course: data.course,
+          batch: data.batch,
+          image: data.image || "👨‍🎓",
+        }
+      })
+
+      setStudents(studentsList)
+    } catch (error) {
+      console.error("Error loading students:", error)
+    } finally {
+      setLoadingStudents(false)
+    }
+  }
+
   useEffect(() => {
-    if (profile?.email) {
-      loadConversations()
+    if (profile?.uid) {
+      loadConversations(profile.uid)
+      loadStudents()
     }
   }, [profile])
-
-  const loadConversations = async () => {
-    if (!profile?.email) return
-    const chats = await getUserConversations(profile.email, "alumni")
-    setConversations(chats)
-  }
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return
@@ -272,7 +313,7 @@ export default function AlumniDashboard() {
                       <Button
                         size="sm"
                         onClick={() => {
-                          const student = studentsData.find(s => s.id === query.studentId)
+                          const student = students.find((s: StudentUser) => s.email === query.studentEmail)
                           if (student) {
                             setSelectedChat({
                               id: student.email,
@@ -347,33 +388,49 @@ export default function AlumniDashboard() {
               </div>
             )}
             <div className="mt-12">
-              <h2 className="text-2xl font-bold text-foreground mb-6">Directory</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {studentsData.map((student) => (
-                  <div
-                    key={student.id}
-                    className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all flex flex-col items-center text-center"
-                  >
-                    <div className="text-4xl mb-3">{student.image}</div>
-                    <h3 className="font-semibold text-foreground text-lg">{student.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-1">{student.course}</p>
-                    <p className="text-xs text-muted-foreground mb-4">Batch {student.batch}</p>
-
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() =>
-                        setSelectedChat({
-                          id: student.email,
-                          name: student.name,
-                        })
-                      }
+              <h2 className="text-2xl font-bold text-foreground mb-6">Student Directory</h2>
+              {loadingStudents ? (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Loading students...</p>
+                </div>
+              ) : students.length > 0 ? (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {students.map((student) => (
+                    <div
+                      key={student.uid}
+                      className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all flex flex-col items-center text-center"
                     >
-                      Start Chat
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                      <div className="text-4xl mb-3">{student.image}</div>
+                      <h3 className="font-semibold text-foreground text-lg">{student.name}</h3>
+                      <p className="text-sm text-muted-foreground mb-1">{student.course || "Student"}</p>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        {student.batch ? `Batch ${student.batch}` : ""}
+                      </p>
+
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() =>
+                          setSelectedChat({
+                            id: student.email,
+                            name: student.name,
+                          })
+                        }
+                      >
+                        Start Chat
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-card border border-border rounded-lg">
+                  <div className="text-4xl mb-4">👨‍🎓</div>
+                  <h3 className="text-xl font-semibold mb-2">No students yet</h3>
+                  <p className="text-muted-foreground">
+                    When students register, they will appear here.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -681,7 +738,7 @@ export default function AlumniDashboard() {
             setSelectedResume(null)
           }}
           onSubmit={handleSubmitReview}
-          existingReview={submittedReviews.find((r) => r.resumeId === selectedResume.id)}
+          existingReview={selectedResume ? submittedReviews.find((r) => r.resumeId === selectedResume.id) : undefined}
         />
       )}
 
