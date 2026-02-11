@@ -1,29 +1,130 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { ResumeBuilderModal, type ResumeData } from "@/components/resume-builder-modal"
 import Link from "next/link"
 import { Download, Trash2, Edit2 } from "lucide-react"
+import {
+  createResume,
+  updateResume,
+  deleteResume as deleteResumeFromFirebase,
+  getUserResumes,
+  type ResumeData as FirebaseResumeData,
+} from "@/lib/firestore/resume-service"
 
 export default function ResumePage() {
   const [resumes, setResumes] = useState<ResumeData[]>([])
   const [showBuilder, setShowBuilder] = useState(false)
   const [editingResume, setEditingResume] = useState<ResumeData | undefined>()
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState("")
+  const [userEmail, setUserEmail] = useState("")
 
-  const handleSaveResume = (resume: ResumeData) => {
-    if (editingResume) {
-      setResumes(resumes.map((r) => (r.id === resume.id ? resume : r)))
-      setEditingResume(undefined)
+  // Load user info and resumes
+  useEffect(() => {
+    const uid = localStorage.getItem("userId") || ""
+    const email = localStorage.getItem("userEmail") || ""
+    setUserId(uid)
+    setUserEmail(email)
+
+    if (uid) {
+      loadResumes(uid)
     } else {
-      setResumes([resume, ...resumes])
+      setLoading(false)
     }
-    setShowBuilder(false)
+  }, [])
+
+  const loadResumes = async (uid: string) => {
+    setLoading(true)
+    try {
+      const firebaseResumes = await getUserResumes(uid)
+
+      // Convert Firebase resumes to component format
+      const convertedResumes: ResumeData[] = firebaseResumes.map((fbResume) => ({
+        id: fbResume.resumeId || "",
+        fullName: fbResume.fullName,
+        email: fbResume.email,
+        phone: fbResume.phone,
+        summary: fbResume.summary,
+        experience: fbResume.experience,
+        education: fbResume.education,
+        skills: fbResume.skills,
+        certifications: fbResume.certifications,
+        createdAt: fbResume.createdAt instanceof Date ? fbResume.createdAt : new Date(),
+      }))
+
+      setResumes(convertedResumes)
+    } catch (error) {
+      console.error("Error loading resumes:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDeleteResume = (id: string) => {
-    setResumes(resumes.filter((r) => r.id !== id))
+  const handleSaveResume = async (resume: ResumeData) => {
+    if (!userId || !userEmail) {
+      alert("Please log in to save resumes")
+      return
+    }
+
+    try {
+      if (editingResume) {
+        // Update existing resume
+        await updateResume(resume.id, {
+          fullName: resume.fullName,
+          email: resume.email,
+          phone: resume.phone,
+          summary: resume.summary,
+          experience: resume.experience,
+          education: resume.education,
+          skills: resume.skills,
+          certifications: resume.certifications,
+        })
+        setResumes(resumes.map((r) => (r.id === resume.id ? resume : r)))
+        setEditingResume(undefined)
+      } else {
+        // Create new resume
+        const resumeId = await createResume({
+          userId,
+          userEmail,
+          fullName: resume.fullName,
+          email: resume.email,
+          phone: resume.phone,
+          summary: resume.summary,
+          experience: resume.experience,
+          education: resume.education,
+          skills: resume.skills,
+          certifications: resume.certifications,
+        })
+
+        const newResume: ResumeData = {
+          ...resume,
+          id: resumeId,
+          createdAt: new Date(),
+        }
+        setResumes([newResume, ...resumes])
+      }
+      setShowBuilder(false)
+    } catch (error) {
+      console.error("Error saving resume:", error)
+      alert("Failed to save resume. Please try again.")
+    }
+  }
+
+  const handleDeleteResume = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this resume?")) {
+      return
+    }
+
+    try {
+      await deleteResumeFromFirebase(id)
+      setResumes(resumes.filter((r) => r.id !== id))
+    } catch (error) {
+      console.error("Error deleting resume:", error)
+      alert("Failed to delete resume. Please try again.")
+    }
   }
 
   const handleEditResume = (resume: ResumeData) => {
@@ -76,7 +177,11 @@ ${resume.certifications ? `CERTIFICATIONS\n${resume.certifications}` : ""}
           </p>
         </div>
 
-        {resumes.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Loading resumes...</p>
+          </div>
+        ) : resumes.length === 0 ? (
           <div className="bg-card border border-border rounded-lg p-12 text-center">
             <div className="text-5xl mb-4">📄</div>
             <h2 className="text-xl font-semibold text-foreground mb-2">No Resumes Yet</h2>
