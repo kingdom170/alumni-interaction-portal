@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { RatingModal } from "@/components/rating-modal"
+import { getAllCourses, type CourseData } from "@/lib/firestore/course-service"
 
 interface Course {
   id: number
@@ -111,6 +112,25 @@ export default function CoursesPage() {
     courseTitle: string
   }>({ isOpen: false, courseId: null, courseTitle: "" })
   const [ratings, setRatings] = useState<Record<number, { rating: number; comment: string }>>({})
+  const [coursesData, setCoursesData] = useState<CourseData[]>([])
+  const [loadingCourses, setLoadingCourses] = useState(true)
+
+  // Load courses from Firebase on mount
+  useEffect(() => {
+    loadCourses()
+  }, [])
+
+  const loadCourses = async () => {
+    setLoadingCourses(true)
+    try {
+      const courses = await getAllCourses()
+      setCoursesData(courses)
+    } catch (error) {
+      console.error("Error loading courses:", error)
+    } finally {
+      setLoadingCourses(false)
+    }
+  }
 
   const categories = ["All", ...new Set(coursesData.map((c) => c.category))]
   const levels = ["All", "Beginner", "Intermediate", "Advanced"]
@@ -122,10 +142,10 @@ export default function CoursesPage() {
     return matchesSearch && matchesCategory && matchesLevel
   })
 
-  const handleEnroll = (courseId: number, courseLink: string) => {
+  const handleEnroll = (courseId: string, courseLink: string) => {
     window.open(courseLink, "_blank")
-    if (!enrolledCourses.includes(courseId)) {
-      setEnrolledCourses([...enrolledCourses, courseId])
+    if (!enrolledCourses.includes(Number(courseId))) {
+      setEnrolledCourses([...enrolledCourses, Number(courseId)])
     }
   }
 
@@ -173,8 +193,8 @@ export default function CoursesPage() {
                   key={category}
                   onClick={() => setSelectedCategory(category)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedCategory === category
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                 >
                   {category}
@@ -192,8 +212,8 @@ export default function CoursesPage() {
                   key={level}
                   onClick={() => setSelectedLevel(level)}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedLevel === level
-                      ? "bg-accent text-accent-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "bg-accent text-accent-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                 >
                   {level}
@@ -203,11 +223,12 @@ export default function CoursesPage() {
           </div>
         </div>
 
+
         {/* Courses Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCourses.map((course) => (
             <div
-              key={course.id}
+              key={course.courseId}
               className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-shadow"
             >
               {/* Course Header */}
@@ -216,7 +237,7 @@ export default function CoursesPage() {
                   <span className="text-xs font-semibold bg-primary/20 text-primary px-2 py-1 rounded">
                     {course.level}
                   </span>
-                  <span className="text-sm font-medium text-foreground">⭐ {course.rating}</span>
+                  <span className="text-sm font-medium text-foreground">⭐ {course.rating || 0}</span>
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-1">{course.title}</h3>
                 <p className="text-sm text-muted-foreground">{course.category}</p>
@@ -241,15 +262,15 @@ export default function CoursesPage() {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <span>👥</span>
-                    <span>{course.enrolledCount} enrolled</span>
+                    <span>{course.enrolledCount || 0} enrolled</span>
                   </div>
                 </div>
 
-                {ratings[course.id] && (
+                {ratings[Number(course.courseId)] && (
                   <div className="bg-muted/50 p-2 rounded text-xs">
                     <div className="flex gap-1 mb-1">
                       {[...Array(5)].map((_, i) => (
-                        <span key={i}>{i < ratings[course.id].rating ? "⭐" : "☆"}</span>
+                        <span key={i}>{i < ratings[Number(course.courseId)].rating ? "⭐" : "☆"}</span>
                       ))}
                     </div>
                     Your rating
@@ -257,18 +278,18 @@ export default function CoursesPage() {
                 )}
 
                 <Button
-                  onClick={() => handleEnroll(course.id, course.link)}
+                  onClick={() => handleEnroll(course.courseId!, course.link)}
                   className="w-full mb-2"
-                  variant={enrolledCourses.includes(course.id) ? "default" : "outline"}
+                  variant={enrolledCourses.includes(Number(course.courseId)) ? "default" : "outline"}
                 >
-                  {enrolledCourses.includes(course.id) ? "✓ Enrolled" : "Enroll Now"}
+                  {enrolledCourses.includes(Number(course.courseId)) ? "✓ Enrolled" : "Enroll Now"}
                 </Button>
 
                 <button
-                  onClick={() => setRatingModal({ isOpen: true, courseId: course.id, courseTitle: course.title })}
+                  onClick={() => setRatingModal({ isOpen: true, courseId: Number(course.courseId), courseTitle: course.title })}
                   className="w-full px-3 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
                 >
-                  {ratings[course.id] ? "Update Rating" : "Rate Course"}
+                  {ratings[Number(course.courseId)] ? "Update Rating" : "Rate Course"}
                 </button>
               </div>
             </div>

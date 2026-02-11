@@ -39,6 +39,11 @@ export default function TeacherLoginPage() {
       if (userDoc.exists()) {
         const userData = userDoc.data()
         if (userData.role === "teacher") {
+          // Save teacher info to localStorage
+          localStorage.setItem("userRole", "teacher")
+          localStorage.setItem("userEmail", userData.email || normalizedEmail)
+          localStorage.setItem("userName", userData.name || "Teacher")
+          localStorage.setItem("userId", user.uid)
           router.push("/teacher-dashboard")
         } else {
           setError(`This account is registered as ${userData.role}. Please login via ${userData.role} login.`)
@@ -57,9 +62,9 @@ export default function TeacherLoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 opacity-0-init animate-fade-in-up">
           <div className="inline-flex items-center justify-center gap-2 mb-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl animate-bounce-gentle">
               S
             </div>
             <h1 className="text-2xl font-bold text-foreground">Slumini</h1>
@@ -69,7 +74,7 @@ export default function TeacherLoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-card border border-border rounded-lg p-8 shadow-lg">
+        <div className="bg-card border border-border rounded-lg p-8 shadow-lg opacity-0-init animate-scale-in delay-200">
           <form onSubmit={handleLogin} className="space-y-6">
             {/* Email */}
             <div>
@@ -85,7 +90,7 @@ export default function TeacherLoginPage() {
                   setError("")
                 }}
                 placeholder="teacher@college.edu"
-                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
               />
             </div>
 
@@ -103,25 +108,24 @@ export default function TeacherLoginPage() {
                   setError("")
                 }}
                 placeholder="••••••••"
-                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
               />
             </div>
 
-            {/* Error Message */}
             {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm">{error}</div>
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm animate-slide-down animate-shake">{error}</div>
             )}
 
             {/* Submit Button */}
             <div className="grid grid-cols-2 gap-4">
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 py-2 h-auto text-base">
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 py-2 h-auto text-base transition-all hover:scale-105">
                 Login
               </Button>
               <Button
                 type="button"
                 onClick={() => router.push("/register?role=teacher")}
                 variant="outline"
-                className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 py-2 h-auto text-base"
+                className="w-full border-blue-600 text-blue-600 hover:bg-blue-50 py-2 h-auto text-base transition-all hover:scale-105"
               >
                 Sign Up
               </Button>
@@ -140,16 +144,16 @@ export default function TeacherLoginPage() {
         </div>
 
         {/* Features */}
-        <div className="mt-8 grid grid-cols-3 gap-4">
-          <div className="text-center">
+        <div className="mt-8 grid grid-cols-3 gap-4 opacity-0-init animate-fade-in-up delay-400">
+          <div className="text-center hover-scale cursor-pointer">
             <div className="text-2xl mb-2">📅</div>
             <p className="text-xs text-muted-foreground">Post Events</p>
           </div>
-          <div className="text-center">
+          <div className="text-center hover-scale cursor-pointer">
             <div className="text-2xl mb-2">👥</div>
             <p className="text-xs text-muted-foreground">Manage Students</p>
           </div>
-          <div className="text-center">
+          <div className="text-center hover-scale cursor-pointer">
             <div className="text-2xl mb-2">📊</div>
             <p className="text-xs text-muted-foreground">Analytics</p>
           </div>

@@ -3,38 +3,57 @@
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
-import { alumniData, type ChatMessage } from "@/lib/data"
+import { alumniData } from "@/lib/data"
 import { useParams } from "next/navigation"
+import { sendMessage, subscribeToConversation, generateConversationId, type MessageData } from "@/lib/firestore/chat-service"
 
 export default function ChatPage() {
   const params = useParams()
   const alumniId = Number.parseInt(params.alumniId as string)
   const alumni = alumniData.find((a) => a.id === alumniId)
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "1",
-      sender: "alumni",
-      message: "Hi! Thanks for reaching out. How can I help you with your career?",
-      timestamp: new Date(Date.now() - 3600000),
-    },
-    {
-      id: "2",
-      sender: "user",
-      message: "Hi! I'm interested in transitioning to software development. Can you give me some advice?",
-      timestamp: new Date(Date.now() - 3500000),
-    },
-    {
-      id: "3",
-      sender: "alumni",
-      message:
-        "First, I'd recommend building a strong foundation in programming. Start with one language like Python or JavaScript. Then work on real projects and contribute to open source.",
-      timestamp: new Date(Date.now() - 3400000),
-    },
-  ])
-
+  const [messages, setMessages] = useState<MessageData[]>([])
   const [inputMessage, setInputMessage] = useState("")
+  const [userType, setUserType] = useState<"user" | "teacher" | "alumni">("user")
+  const [userId, setUserId] = useState("")
+  const [userName, setUserName] = useState("")
+  const [userRole, setUserRole] = useState<"student" | "alumni">("student")
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Detect user type and load user info from localStorage
+  useEffect(() => {
+    const role = localStorage.getItem("userRole")
+    const email = localStorage.getItem("userEmail") || ""
+    const name = localStorage.getItem("userName") || "User"
+
+    setUserId(email)
+    setUserName(name)
+
+    if (role === "teacher") {
+      setUserType("teacher")
+      setUserRole("student") // Teachers chat as if they were students
+    } else if (role === "alumni") {
+      setUserType("alumni")
+      setUserRole("alumni")
+    } else {
+      setUserType("user")
+      setUserRole("student")
+    }
+  }, [])
+
+  // Subscribe to real-time messages
+  useEffect(() => {
+    if (!userId || !alumni) return
+
+    // Use alumni email if available, otherwise fallback to ID
+    const alumniId = alumni.email || alumni.id.toString()
+    const conversationId = generateConversationId(userId, alumniId)
+    const unsubscribe = subscribeToConversation(conversationId, (newMessages) => {
+      setMessages(newMessages)
+    })
+
+    return () => unsubscribe()
+  }, [userId, alumni])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -44,34 +63,27 @@ export default function ChatPage() {
     scrollToBottom()
   }, [messages])
 
-  const handleSendMessage = () => {
-    if (inputMessage.trim()) {
-      const newMessage: ChatMessage = {
-        id: String(messages.length + 1),
-        sender: "user",
-        message: inputMessage,
-        timestamp: new Date(),
-      }
-      setMessages([...messages, newMessage])
-      setInputMessage("")
+  const handleSendMessage = async () => {
+    if (inputMessage.trim() && userId && alumni) {
+      try {
+        const alumniId = alumni.email || alumni.id.toString()
+        const conversationId = generateConversationId(userId, alumniId)
 
-      // Simulate alumni response after 1 second
-      setTimeout(() => {
-        const responses = [
-          "That's a great question! Let me share my experience...",
-          "I'm glad you asked. Here's what worked for me...",
-          "Great point! You should also consider...",
-          "That's exactly what I did at your stage...",
-        ]
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-        const alumniResponse: ChatMessage = {
-          id: String(messages.length + 2),
-          sender: "alumni",
-          message: randomResponse,
-          timestamp: new Date(),
-        }
-        setMessages((prev) => [...prev, alumniResponse])
-      }, 1000)
+        await sendMessage(
+          conversationId,
+          userId,
+          userName,
+          userRole,
+          inputMessage,
+          alumniId,
+          alumni.name
+        )
+
+        setInputMessage("")
+      } catch (error) {
+        console.error("Error sending message:", error)
+        alert("Failed to send message. Please try again.")
+      }
     }
   }
 
@@ -81,7 +93,7 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <Navbar userType="user" />
+      <Navbar userType={userType} />
 
       <div className="flex-1 max-w-3xl mx-auto w-full flex flex-col">
         {/* Chat Header */}
@@ -99,24 +111,28 @@ export default function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
-              <div
-                className={`max-w-xs md:max-w-md px-4 py-3 rounded-lg ${
-                  msg.sender === "user"
+          {messages.map((msg) => {
+            const isCurrentUser = msg.senderId === userId
+            const timestamp = msg.timestamp?.toDate ? msg.timestamp.toDate() : new Date()
+
+            return (
+              <div key={msg.messageId} className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-xs md:max-w-md px-4 py-3 rounded-lg ${isCurrentUser
                     ? "bg-primary text-primary-foreground rounded-br-none"
                     : "bg-card border border-border text-foreground rounded-bl-none"
-                }`}
-              >
-                <p className="text-sm">{msg.message}</p>
-                <p
-                  className={`text-xs mt-1 ${msg.sender === "user" ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                    }`}
                 >
-                  {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </p>
+                  <p className="text-sm">{msg.message}</p>
+                  <p
+                    className={`text-xs mt-1 ${isCurrentUser ? "text-primary-foreground/70" : "text-muted-foreground"}`}
+                  >
+                    {timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={messagesEndRef} />
         </div>
 

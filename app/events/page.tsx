@@ -1,10 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { eventsData } from "@/lib/data"
 import { RatingModal } from "@/components/rating-modal"
+import { EventRegistrationModal, type RegistrationData } from "@/components/event-registration-modal"
+import { getAllEvents, registerForEvent, isUserRegistered, type EventData } from "@/lib/firestore/event-service"
 
 export default function EventsPage() {
   const [registeredEvents, setRegisteredEvents] = useState<number[]>([])
@@ -14,13 +16,63 @@ export default function EventsPage() {
     eventId: number | null
     eventTitle: string
   }>({ isOpen: false, eventId: null, eventTitle: "" })
+  const [registrationModal, setRegistrationModal] = useState<{
+    isOpen: boolean
+    eventId: number | null
+    eventTitle: string
+  }>({ isOpen: false, eventId: null, eventTitle: "" })
   const [ratings, setRatings] = useState<Record<number, { rating: number; comment: string }>>({})
+  const [allEvents, setAllEvents] = useState<EventData[]>([])
+  const [loadingEvents, setLoadingEvents] = useState(false)
+  const [userEmail, setUserEmail] = useState("")
 
-  const handleRegisterEvent = (eventId: number) => {
+  // Load events from Firebase and user email on mount
+  useEffect(() => {
+    const email = localStorage.getItem("userEmail") || "student@mes.ac.in"
+    setUserEmail(email)
+    loadEvents()
+  }, [])
+
+  const loadEvents = async () => {
+    setLoadingEvents(true)
+    try {
+      const events = await getAllEvents()
+      setAllEvents(events)
+    } catch (error) {
+      console.error("Error loading events:", error)
+    } finally {
+      setLoadingEvents(false)
+    }
+  }
+
+  const handleRegisterEvent = (eventId: number, eventTitle: string) => {
     if (registeredEvents.includes(eventId)) {
+      // Unregister
       setRegisteredEvents(registeredEvents.filter((id) => id !== eventId))
     } else {
-      setRegisteredEvents([...registeredEvents, eventId])
+      // Open registration form
+      setRegistrationModal({ isOpen: true, eventId, eventTitle })
+    }
+  }
+
+  const handleRegistrationSubmit = async (data: RegistrationData) => {
+    if (registrationModal.eventId !== null) {
+      try {
+        // Save to Firebase
+        await registerForEvent(registrationModal.eventId.toString(), {
+          ...data,
+          userName: data.fullName,
+          userEmail: data.email,
+          userPhone: data.phone,
+        })
+
+        setRegisteredEvents([...registeredEvents, registrationModal.eventId])
+        setRegistrationModal({ isOpen: false, eventId: null, eventTitle: "" })
+        alert(`Registration successful for ${registrationModal.eventTitle}!\n\nYour registration details have been submitted.`)
+      } catch (error) {
+        console.error("Error submitting registration:", error)
+        alert("Failed to register for event. Please try again.")
+      }
     }
   }
 
@@ -106,7 +158,7 @@ export default function EventsPage() {
 
               <div className="flex gap-2">
                 <Button
-                  onClick={() => handleRegisterEvent(event.id)}
+                  onClick={() => handleRegisterEvent(event.id, event.title)}
                   className={registeredEvents.includes(event.id) ? "flex-1 bg-green-600 hover:bg-green-700" : "flex-1"}
                 >
                   {registeredEvents.includes(event.id) ? "✓ Registered" : "Register"}
@@ -135,6 +187,13 @@ export default function EventsPage() {
           itemType="event"
           onClose={() => setRatingModal({ isOpen: false, eventId: null, eventTitle: "" })}
           onSubmit={handleRatingSubmit}
+        />
+
+        <EventRegistrationModal
+          isOpen={registrationModal.isOpen}
+          eventTitle={registrationModal.eventTitle}
+          onClose={() => setRegistrationModal({ isOpen: false, eventId: null, eventTitle: "" })}
+          onSubmit={handleRegistrationSubmit}
         />
       </main>
     </div>

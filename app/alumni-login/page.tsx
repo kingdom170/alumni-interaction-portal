@@ -58,9 +58,9 @@ export default function AlumniLoginPage() {
         <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center px-4">
             <div className="w-full max-w-md">
                 {/* Logo */}
-                <div className="text-center mb-8">
+                <div className="text-center mb-8 opacity-0-init animate-fade-in-up">
                     <div className="inline-flex items-center justify-center gap-2 mb-4">
-                        <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+                        <div className="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl animate-bounce-gentle">
                             S
                         </div>
                         <h1 className="text-2xl font-bold text-foreground">Slumini</h1>
@@ -70,10 +70,10 @@ export default function AlumniLoginPage() {
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-card border border-border rounded-lg p-8 shadow-lg">
+                <div className="bg-card border border-border rounded-lg p-8 shadow-lg opacity-0-init animate-scale-in delay-200">
                     <form onSubmit={handleLogin} className="space-y-6">
                         {/* Email */}
-                        <div>
+                        <div className="opacity-0-init animate-fade-in-up delay-300">
                             <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                                 Email Address
                             </label>
@@ -86,12 +86,12 @@ export default function AlumniLoginPage() {
                                     setError("")
                                 }}
                                 placeholder="alumni@company.com"
-                                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all duration-300"
                             />
                         </div>
 
                         {/* Password */}
-                        <div>
+                        <div className="opacity-0-init animate-fade-in-up delay-400">
                             <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
                                 Password
                             </label>
@@ -104,25 +104,25 @@ export default function AlumniLoginPage() {
                                     setError("")
                                 }}
                                 placeholder="••••••••"
-                                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all duration-300"
                             />
                         </div>
 
                         {/* Error Message */}
                         {error && (
-                            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm">{error}</div>
+                            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-sm animate-slide-down animate-shake">{error}</div>
                         )}
 
                         {/* Submit Button */}
                         <div className="grid grid-cols-2 gap-4">
-                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 py-2 h-auto text-base">
+                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 py-2 h-auto text-base transition-all hover:scale-105">
                                 Login
                             </Button>
                             <Button
                                 type="button"
                                 onClick={() => router.push("/register?role=alumni")}
                                 variant="outline"
-                                className="w-full border-purple-600 text-purple-600 hover:bg-purple-50 py-2 h-auto text-base"
+                                className="w-full border-purple-600 text-purple-600 hover:bg-purple-50 py-2 h-auto text-base transition-all hover:scale-105"
                             >
                                 Sign Up
                             </Button>

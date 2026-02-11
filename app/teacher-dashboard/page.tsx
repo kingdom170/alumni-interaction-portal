@@ -2,12 +2,15 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { eventsData, alumniData, eventQueryMessages, coursesData } from "@/lib/data"
 import Link from "next/link"
 import type { Course } from "@/lib/data"
+import { createEvent, getEventsByOrganizer, type EventData } from "@/lib/firestore/event-service"
+import { createCourse, getCoursesByInstructor, type CourseData } from "@/lib/firestore/course-service"
+import { EventRegistrationsModal } from "@/components/event-registrations-modal"
 
 export default function TeacherDashboard() {
   const [activeTab, setActiveTab] = useState<
@@ -31,8 +34,17 @@ export default function TeacherDashboard() {
   const [courseLevel, setCourseLevel] = useState("Beginner")
   const [courseDuration, setCourseDuration] = useState("")
   const [courseStartDate, setCourseStartDate] = useState("")
-  const [postedCourses, setPostedCourses] = useState<Course[]>(coursesData)
+  const [courseLink, setCourseLink] = useState("")
+  const [postedCourses, setPostedCourses] = useState<Course[]>([])
+  const [loadingCourses, setLoadingCourses] = useState(false)
   const [showCourseForm, setShowCourseForm] = useState(false)
+  const [registrationsModal, setRegistrationsModal] = useState<{
+    isOpen: boolean
+    eventId: string
+    eventTitle: string
+  }>({ isOpen: false, eventId: "", eventTitle: "" })
+  const [teacherEmail, setTeacherEmail] = useState("")
+  const [loadingEvents, setLoadingEvents] = useState(false)
 
   const receivedReviews = [
     {
@@ -61,31 +73,101 @@ export default function TeacherDashboard() {
     },
   ]
 
-  const handlePostEvent = (e: React.FormEvent) => {
+  // Load teacher email from localStorage on component mount
+  useEffect(() => {
+    const email = localStorage.getItem("userEmail") || "teacher@mes.ac.in"
+    const name = localStorage.getItem("userName") || "Teacher"
+    setTeacherEmail(email)
+    // Load events and courses from Firebase
+    loadTeacherEvents(email)
+    loadCourses()
+  }, [])
+
+  const loadTeacherEvents = async (email: string) => {
+    setLoadingEvents(true)
+    try {
+      const events = await getEventsByOrganizer(email)
+      if (events.length > 0) {
+        // Convert Firebase events to local format for display
+        const formattedEvents = events.map((event) => ({
+          id: event.eventId || "",
+          title: event.title,
+          description: event.description,
+          date: event.date,
+          time: event.time,
+          organizer: event.createdByName,
+          category: event.category,
+        }))
+        setPostedEvents(formattedEvents as any)
+      }
+    } catch (error) {
+      console.error("Error loading events:", error)
+    } finally {
+      setLoadingEvents(false)
+    }
+  }
+
+  // Load courses from Firebase
+  const loadCourses = async () => {
+    setLoadingCourses(true)
+    try {
+      const email = localStorage.getItem("userEmail") || "teacher@mes.ac.in"
+      const courses = await getCoursesByInstructor(email)
+      setPostedCourses(courses as any)
+    } catch (error) {
+      console.error("Error loading courses:", error)
+    } finally {
+      setLoadingCourses(false)
+    }
+  }
+
+  const handlePostEvent = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!eventTitle || !eventDescription || !eventDate || !eventTime) {
       alert("Please fill in all fields")
       return
     }
 
-    const newEvent = {
-      id: postedEvents.length + 1,
-      title: eventTitle,
-      description: eventDescription,
-      date: eventDate,
-      time: eventTime,
-      organizer: "Prof. Your Name",
-      category: eventCategory,
-    }
+    try {
+      const teacherName = localStorage.getItem("userName") || "Teacher"
+      const email = localStorage.getItem("userEmail") || "teacher@mes.ac.in"
 
-    setPostedEvents([...postedEvents, newEvent])
-    setEventTitle("")
-    setEventDescription("")
-    setEventDate("")
-    setEventTime("")
-    setEventCategory("Workshop")
-    setShowForm(false)
-    alert("Event posted successfully!")
+      // Save to Firebase
+      const eventId = await createEvent({
+        title: eventTitle,
+        description: eventDescription,
+        date: eventDate,
+        time: eventTime,
+        category: eventCategory,
+        createdBy: email,
+        createdByName: teacherName,
+        createdByRole: "teacher",
+        status: "upcoming",
+      })
+
+      // Add to local state for immediate display
+      const newEvent = {
+        id: eventId,
+        title: eventTitle,
+        description: eventDescription,
+        date: eventDate,
+        time: eventTime,
+        organizer: teacherName,
+        category: eventCategory,
+      }
+
+      setPostedEvents([newEvent, ...postedEvents] as any)
+      setEventTitle("")
+      setEventDescription("")
+      setEventDate("")
+      setEventTime("")
+      setEventCategory("Workshop")
+      setShowForm(false)
+      alert("Event posted successfully!")
+    } catch (error) {
+      console.error("Error posting event:", error)
+      alert("Failed to post event. Please try again.")
+    }
   }
 
   const handleDeleteEvent = (eventId: number) => {
@@ -101,35 +183,59 @@ export default function TeacherDashboard() {
     alert("Reply sent to student!")
   }
 
-  const handlePostCourse = (e: React.FormEvent) => {
+  const handlePostCourse = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!courseTitle || !courseDescription || !courseDuration || !courseStartDate) {
-      alert("Please fill in all fields")
+    if (!courseTitle || !courseDescription || !courseDuration || !courseStartDate || !courseLink) {
+      alert("Please fill in all fields including the course link")
       return
     }
 
-    const newCourse = {
-      id: postedCourses.length + 1,
-      title: courseTitle,
-      description: courseDescription,
-      category: courseCategory,
-      level: courseLevel as "Beginner" | "Intermediate" | "Advanced",
-      duration: courseDuration,
-      startDate: courseStartDate,
-      instructor: "Prof. Your Name",
-      enrolledCount: 0,
-      rating: 0,
-    }
+    try {
+      const teacherName = localStorage.getItem("userName") || "Teacher"
+      const email = localStorage.getItem("userEmail") || "teacher@mes.ac.in"
 
-    setPostedCourses([...postedCourses, newCourse])
-    setCourseTitle("")
-    setCourseDescription("")
-    setCourseCategory("Web Development")
-    setCourseLevel("Beginner")
-    setCourseDuration("")
-    setCourseStartDate("")
-    setShowCourseForm(false)
-    alert("Course posted successfully!")
+      // Save to Firebase
+      const courseId = await createCourse({
+        title: courseTitle,
+        description: courseDescription,
+        category: courseCategory,
+        level: courseLevel as "Beginner" | "Intermediate" | "Advanced",
+        duration: courseDuration,
+        startDate: courseStartDate,
+        link: courseLink,
+        instructor: teacherName,
+        instructorId: email,
+      })
+
+      // Add to local state for immediate display
+      const newCourse = {
+        id: courseId,
+        title: courseTitle,
+        description: courseDescription,
+        category: courseCategory,
+        level: courseLevel as "Beginner" | "Intermediate" | "Advanced",
+        duration: courseDuration,
+        startDate: courseStartDate,
+        link: courseLink,
+        instructor: teacherName,
+        enrolledCount: 0,
+        rating: 0,
+      }
+
+      setPostedCourses([newCourse, ...postedCourses] as any)
+      setCourseTitle("")
+      setCourseDescription("")
+      setCourseCategory("Web Development")
+      setCourseLevel("Beginner")
+      setCourseDuration("")
+      setCourseStartDate("")
+      setCourseLink("")
+      setShowCourseForm(false)
+      alert("Course posted successfully!")
+    } catch (error) {
+      console.error("Error posting course:", error)
+      alert("Failed to post course. Please try again.")
+    }
   }
 
   const uniqueFields = ["all", ...new Set(alumniData.map((a) => a.field))]
@@ -160,11 +266,10 @@ export default function TeacherDashboard() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-4 py-3 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
             >
               {tab === "post-event"
                 ? "Post Event"
@@ -263,7 +368,20 @@ export default function TeacherDashboard() {
                         </div>
                       </div>
 
-                      <Button className="w-full bg-blue-100 text-blue-600 hover:bg-blue-200">View Details</Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() =>
+                            setRegistrationsModal({
+                              isOpen: true,
+                              eventId: event.id.toString(),
+                              eventTitle: event.title,
+                            })
+                          }
+                          className="flex-1 bg-blue-100 text-blue-600 hover:bg-blue-200"
+                        >
+                          View Registrations
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -521,6 +639,24 @@ export default function TeacherDashboard() {
                   />
                 </div>
 
+                {/* Course Link */}
+                <div>
+                  <label htmlFor="courseLink" className="block text-sm font-medium text-foreground mb-2">
+                    Course Link
+                  </label>
+                  <input
+                    id="courseLink"
+                    type="url"
+                    value={courseLink}
+                    onChange={(e) => setCourseLink(e.target.value)}
+                    placeholder="e.g., https://www.coursera.org/learn/course-name"
+                    className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add enrollment link from platforms like Coursera, Udemy, edX, etc.
+                  </p>
+                </div>
+
                 {/* Submit Button */}
                 <div className="flex gap-4 pt-4">
                   <button
@@ -564,9 +700,8 @@ export default function TeacherDashboard() {
                         <p className="text-sm text-muted-foreground">{query.studentEmail}</p>
                       </div>
                       <span
-                        className={`text-xs font-medium px-3 py-1 rounded-full ${
-                          query.replied ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                        }`}
+                        className={`text-xs font-medium px-3 py-1 rounded-full ${query.replied ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                          }`}
                       >
                         {query.replied ? "✓ Replied" : "⏳ Pending"}
                       </span>
@@ -632,11 +767,10 @@ export default function TeacherDashboard() {
                     <button
                       key={field}
                       onClick={() => setSelectedField(field)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${
-                        selectedField === field
-                          ? "bg-blue-600 text-white"
-                          : "bg-card border border-border text-foreground hover:border-blue-600"
-                      }`}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${selectedField === field
+                        ? "bg-blue-600 text-white"
+                        : "bg-card border border-border text-foreground hover:border-blue-600"
+                        }`}
                     >
                       {field === "all" ? "All Fields" : field}
                     </button>
@@ -731,6 +865,13 @@ export default function TeacherDashboard() {
           </div>
         )}
       </main>
+
+      <EventRegistrationsModal
+        isOpen={registrationsModal.isOpen}
+        eventId={registrationsModal.eventId}
+        eventTitle={registrationsModal.eventTitle}
+        onClose={() => setRegistrationsModal({ isOpen: false, eventId: "", eventTitle: "" })}
+      />
     </div>
   )
 }

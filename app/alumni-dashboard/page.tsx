@@ -8,9 +8,11 @@ import { PostJobForm, type JobFormData } from "@/components/post-job-form"
 import { ResumeReviewModal, type ResumeReview } from "@/components/resume-review-modal"
 import type { ResumeData } from "@/components/resume-builder-modal"
 import { GlobalChat } from "@/components/global-chat"
+import { ChatWindow } from "@/components/chat-window"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth, db } from "@/lib/firebase"
+import { getUserConversations, type ConversationData } from "@/lib/firestore/chat-service"
 import { useRouter } from "next/navigation"
 
 export default function AlumniDashboard() {
@@ -29,6 +31,8 @@ export default function AlumniDashboard() {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [editForm, setEditForm] = useState<any>({})
+  const [conversations, setConversations] = useState<ConversationData[]>([])
+  const [selectedChat, setSelectedChat] = useState<{ id: string; name: string } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -52,6 +56,19 @@ export default function AlumniDashboard() {
     })
     return () => unsubscribe()
   }, [router])
+
+  // Load conversations when profile is loaded
+  useEffect(() => {
+    if (profile?.email) {
+      loadConversations()
+    }
+  }, [profile])
+
+  const loadConversations = async () => {
+    if (!profile?.email) return
+    const chats = await getUserConversations(profile.email, "alumni")
+    setConversations(chats)
+  }
 
   const handleSaveProfile = async () => {
     if (!auth.currentUser) return
@@ -252,7 +269,18 @@ export default function AlumniDashboard() {
                         <p className="text-muted-foreground mb-2">{query.question}</p>
                         <p className="text-xs text-muted-foreground">{query.timestamp}</p>
                       </div>
-                      <Button size="sm" onClick={() => setChatStudentId(query.studentId)}>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const student = studentsData.find(s => s.id === query.studentId)
+                          if (student) {
+                            setSelectedChat({
+                              id: student.email,
+                              name: student.name
+                            })
+                          }
+                        }}
+                      >
                         Respond
                       </Button>
                     </div>
@@ -267,26 +295,85 @@ export default function AlumniDashboard() {
         {activeTab === "messages" && (
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-6">Student Messages</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {studentsData.map((student) => (
-                <div
-                  key={student.id}
-                  className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all flex flex-col items-center text-center"
-                >
-                  <div className="text-4xl mb-3">{student.image}</div>
-                  <h3 className="font-semibold text-foreground text-lg">{student.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-1">{student.course}</p>
-                  <p className="text-xs text-muted-foreground mb-4">Batch {student.batch}</p>
 
-                  <Button
-                    variant="default"
-                    className="w-full"
-                    onClick={() => setChatStudentId(student.id)}
+            {conversations.length > 0 ? (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {conversations.map((chat) => (
+                  <div
+                    key={chat.conversationId}
+                    className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all flex flex-col cursor-pointer relative"
+                    onClick={() =>
+                      setSelectedChat({
+                        id: chat.participants.studentId,
+                        name: chat.participants.studentName,
+                      })
+                    }
                   >
-                    Chat
-                  </Button>
-                </div>
-              ))}
+                    {chat.unreadCount.alumni > 0 && (
+                      <span className="absolute top-4 right-4 bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full">
+                        {chat.unreadCount.alumni} new
+                      </span>
+                    )}
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="text-3xl">👨‍🎓</div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{chat.participants.studentName}</h3>
+                        <p className="text-xs text-muted-foreground">Student</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-muted/30 p-3 rounded-lg flex-1 mb-4">
+                      <p className="text-sm text-foreground line-clamp-2 italic">"{chat.lastMessage}"</p>
+                      <p className="text-xs text-muted-foreground mt-2 text-right">
+                        {chat.lastMessageTime?.toDate
+                          ? chat.lastMessageTime.toDate().toLocaleDateString()
+                          : "Just now"}
+                      </p>
+                    </div>
+
+                    <Button variant="outline" className="w-full mt-auto">
+                      Reply
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-card border border-border rounded-lg">
+                <div className="text-4xl mb-4">💬</div>
+                <h3 className="text-xl font-semibold mb-2">No messages yet</h3>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  When students contact you for mentorship, their messages will appear here.
+                </p>
+              </div>
+            )}
+            <div className="mt-12">
+              <h2 className="text-2xl font-bold text-foreground mb-6">Directory</h2>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {studentsData.map((student) => (
+                  <div
+                    key={student.id}
+                    className="bg-card border border-border rounded-lg p-6 hover:border-primary transition-all flex flex-col items-center text-center"
+                  >
+                    <div className="text-4xl mb-3">{student.image}</div>
+                    <h3 className="font-semibold text-foreground text-lg">{student.name}</h3>
+                    <p className="text-sm text-muted-foreground mb-1">{student.course}</p>
+                    <p className="text-xs text-muted-foreground mb-4">Batch {student.batch}</p>
+
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() =>
+                        setSelectedChat({
+                          id: student.email,
+                          name: student.name,
+                        })
+                      }
+                    >
+                      Start Chat
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -598,6 +685,21 @@ export default function AlumniDashboard() {
         />
       )}
 
+      {selectedChat && profile && (
+        <ChatWindow
+          myId={profile.email}
+          myName={profile.name}
+          myRole="alumni"
+          targetId={selectedChat.id}
+          targetName={selectedChat.name}
+          onClose={() => {
+            setSelectedChat(null)
+            loadConversations() // Refresh list when closing
+          }}
+        />
+      )}
+
+      {/* Legacy global chat logic preserved but unused for now
       {chatStudentId && (
         <GlobalChat
           userType="alumni"
@@ -605,7 +707,8 @@ export default function AlumniDashboard() {
           targetId={chatStudentId}
           onClose={() => setChatStudentId(null)}
         />
-      )}
+      )} 
+      */}
     </div>
   )
 }
